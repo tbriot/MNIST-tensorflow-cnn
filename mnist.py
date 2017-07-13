@@ -1,4 +1,4 @@
-# TODO integration with github
+# what is a tf meta graph ?
 # TODO use GPU
 # TODO normalize with tf.nn.batch_normalization
 
@@ -14,6 +14,7 @@ DATADIR = ROOTDIR + "data/"
 TF_EVTS_DIR = ROOTDIR + "tf-event-files/"
 CHECKPOINT_DIR = ROOTDIR + "tf-model-checkpoint/"
 TRAIN_SET = DATADIR + "train.csv"
+TEST_SET = DATADIR + "test.csv"
 
 HEIGHT = 28  # image height
 WIDTH = HEIGHT
@@ -32,7 +33,6 @@ def normalize_data(data):
 
 
 # the training set contains 42k images
-# the testing set contains 28k images
 def load_data_from_file(filename, rows=2000):
     data = pd.read_csv(filename, nrows=rows)  # load data in a pandas Dataframe
     labels = data.pop("label")  # extract labels from the dataframe
@@ -48,12 +48,25 @@ def load_data_from_file(filename, rows=2000):
     return data, labels
 
 
+# the testing set contains 28k images
+def load_test_data_from_file(filename):
+    data = pd.read_csv(filename)  # load data in a pandas Dataframe
+
+    # convert pandas Dataframes into float32 numpy arrays
+    data = data.values.astype(np.float32)
+
+    data = normalize_data(data)  # set data mean=0 and std dev=1
+    data = data.reshape(-1, HEIGHT, WIDTH, CHANNELS)
+
+    return data
+
+
 # convolutional layer
 def conv_layer(input_data, in_channels, out_channels, name="conv"):
     with tf.name_scope(name):
         w = tf.Variable(tf.truncated_normal([5, 5, in_channels, out_channels], stddev=0.1), name="W")  # filters are 5x5
         b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
-        conv = tf.nn.conv2d(input_data, w, strides=[1, 1, 1, 1], padding="SAME")
+        conv = tf.nn.conv2d(input_data, w, strides=[1, 1, 1, 1], padding="SAME", name="conv")
         act = tf.nn.relu(conv + b)
         tf.summary.histogram("weights", w, collections=["train"])
         tf.summary.histogram("biases", b, collections=["train"])
@@ -95,6 +108,9 @@ def build_model(learning_rate, size_conv1, size_conv2, size_fc1, size_fc2):
     relu2 = tf.nn.relu(fc2)
 
     logits = fc_layer(relu2, size_fc2, LABELS, "fc3")
+
+    with tf.name_scope("predict"):
+        tf.argmax(logits, axis=1, name="tf_pred")
 
     with tf.name_scope("xent"):
         xent = tf.reduce_mean(
@@ -177,13 +193,58 @@ def train_model(g, data, labels, steps=2000, batch=100, run_name="run", restore_
         print("Trained model saved to disk")
 
 
-def main():
-    data, labels = load_data_from_file(TRAIN_SET, rows=50000)
-    g = build_model(0.00005, size_conv1=6, size_conv2=16, size_fc1=120, size_fc2=84)
+# make a prediction based on a model saved on the disk
+def make_prediction(model):
+    # load test data in memory (28k records), normalize it and return a numpy array
+    test_data = load_test_data_from_file(TEST_SET)
 
-    current_dt = time.strftime("%Y%m%d-%H%M%S")
-    train_model(g, data, labels, steps=500, batch=100,
-                run_name=current_dt + "-LeNet5-LR-5E-5-pass2",
-                restore_checkpoint=True)
+    with model.as_default() as g:
+
+        # build feed directory
+        fd = {g.get_tensor_by_name("x:0"): test_data,
+              g.get_tensor_by_name("keep_prob:0"): 1.0}  # no dropout when predicting
+
+        # create a saver to restore the trained model tf Variables from disk
+        saver = tf.train.Saver()
+
+        # get filepath of the model checkpoint saved on disk
+        model_filepath = tf.train.latest_checkpoint(CHECKPOINT_DIR)
+
+        # merge summaries for training and x-validation purpose
+        summ = tf.summary.merge_all("train")
+        # instantiate tf summaries file writer
+        writer = tf.summary.FileWriter(TF_EVTS_DIR + "predict2", graph=g)
+
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+
+        # restore model tf Variables from disk
+        saver.restore(sess, model_filepath)
+
+        # compute prediction
+        test_labels, s = sess.run([g.get_operation_by_name("conv1/conv"), summ], feed_dict=fd)
+        writer.add_summary(s)
+
+        # prediction = digit with the highest probability
+         #test_labels = np.argmax(test_pred, axis=1)
+
+        # load labels in a pandas DataFrame and write prediction file to disk
+        submission = pd.DataFrame(data={"ImageId": (np.arange(test_labels.shape[0]) + 1), "Label": test_labels})
+
+        current_dt = time.strftime("%Y%m%d-%H%M%S")
+        submission.to_csv("prediction-%s.csv" % current_dt, index=False)
+
+
+def main():
+
+    # data, labels = load_data_from_file(TRAIN_SET, rows=50000)
+    g = build_model(0.00001, size_conv1=6, size_conv2=16, size_fc1=120, size_fc2=84)
+    #
+    # current_dt = time.strftime("%Y%m%d-%H%M%S")
+    # train_model(g, data, labels, steps=500, batch=100,
+    #             run_name=current_dt + "-LeNet5-LR-1E-5-pass6",
+    #             restore_checkpoint=True)
+
+    make_prediction(g)
 
 main()
