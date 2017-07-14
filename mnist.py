@@ -68,7 +68,7 @@ def conv_layer(input_data, in_channels, out_channels, name="conv"):
         b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
         conv = tf.nn.conv2d(input_data, w, strides=[1, 1, 1, 1], padding="SAME", name="conv")
         act = tf.nn.relu(conv + b)
-        tf.summary.histogram("weights", w, collections=["train"])
+        tf.summary.histogram("weights", w, collections=["train", "predict"])
         tf.summary.histogram("biases", b, collections=["train"])
         tf.summary.histogram("activation", act, collections=["train"])
         return tf.nn.max_pool(act, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")  # max pooling 1:2
@@ -89,7 +89,7 @@ def fc_layer(input_data, size_in, size_out, name="fc"):
 # model
 def build_model(learning_rate, size_conv1, size_conv2, size_fc1, size_fc2):
     # setup placeholders
-    x = tf.placeholder(tf.float32, shape=[None, HEIGHT, WIDTH, CHANNELS], name="x")
+    x = tf.placeholder(tf.float32, shape=[28000, HEIGHT, WIDTH, CHANNELS], name="x")
     y = tf.placeholder(tf.float32, shape=[None, 10], name="y")
 
     # dropout
@@ -110,7 +110,7 @@ def build_model(learning_rate, size_conv1, size_conv2, size_fc1, size_fc2):
     logits = fc_layer(relu2, size_fc2, LABELS, "fc3")
 
     with tf.name_scope("predict"):
-        tf.argmax(logits, axis=1, name="tf_pred")
+        tf.argmax(logits, axis=1, name="pred")
 
     with tf.name_scope("xent"):
         xent = tf.reduce_mean(
@@ -200,20 +200,11 @@ def make_prediction(model):
 
     with model.as_default() as g:
 
-        # build feed directory
-        fd = {g.get_tensor_by_name("x:0"): test_data,
-              g.get_tensor_by_name("keep_prob:0"): 1.0}  # no dropout when predicting
-
         # create a saver to restore the trained model tf Variables from disk
         saver = tf.train.Saver()
 
         # get filepath of the model checkpoint saved on disk
         model_filepath = tf.train.latest_checkpoint(CHECKPOINT_DIR)
-
-        # merge summaries for training and x-validation purpose
-        summ = tf.summary.merge_all("train")
-        # instantiate tf summaries file writer
-        writer = tf.summary.FileWriter(TF_EVTS_DIR + "predict2", graph=g)
 
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
@@ -221,12 +212,11 @@ def make_prediction(model):
         # restore model tf Variables from disk
         saver.restore(sess, model_filepath)
 
-        # compute prediction
-        test_labels, s = sess.run([g.get_operation_by_name("conv1/conv"), summ], feed_dict=fd)
-        writer.add_summary(s)
+        fd = {g.get_tensor_by_name("x:0"): test_data,
+              g.get_tensor_by_name("keep_prob:0"): 1.0}  # no dropout when predicting
 
-        # prediction = digit with the highest probability
-         #test_labels = np.argmax(test_pred, axis=1)
+        # compute prediction
+        test_labels = sess.run("predict/pred:0", feed_dict=fd)
 
         # load labels in a pandas DataFrame and write prediction file to disk
         submission = pd.DataFrame(data={"ImageId": (np.arange(test_labels.shape[0]) + 1), "Label": test_labels})
