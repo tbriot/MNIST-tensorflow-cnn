@@ -151,6 +151,7 @@ def train_model(g, data, labels, steps=2000, batch=100, run_name="run", restore_
         # create a saver to persist the trained model on disk
         saver = tf.train.Saver()
 
+        # define the feed dictionary for cross-validation
         fd_val = {g.get_tensor_by_name("x:0"): data_val,
                   g.get_tensor_by_name("y:0"): labels_val,
                   g.get_tensor_by_name("keep_prob:0"): 1.0}  # no dropout when x-validating
