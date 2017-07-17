@@ -1,5 +1,6 @@
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+import time
 
 
 class CnnModel:
@@ -18,6 +19,8 @@ class CnnModel:
     TRAIN_PROG_LR = "lr"  # training program learning rate
     TRAIN_PROG_EPOCHS = "epochs"  # training program epochs
 
+    EVENT_DIR_BASE_NAME = "cnn-model"  # name of the directory storing event files produced by tf summaries
+
     def __init__(self, layers_layout):
         self._create_graph(layers_layout)
 
@@ -31,6 +34,7 @@ class CnnModel:
         self._graph = tf.Graph()
         self._create_placeholders()
         curr_layer = self._x
+
         # TODO can use curr_layer.shape[3] size instead ?
         curr_layer_depth = 1
         for i, layer in enumerate(layers_layout):
@@ -48,9 +52,12 @@ class CnnModel:
             elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_TYPE_FULL:
                 # flatten the previous layer output Tensor if not in 2-D
                 # for instance, if Tensor shape is [n, 7, 7, 64], reshapes it to [n, 7*7*64]
-                if len(curr_layer.shape()) != 2:  # if not a 2-D Tensor
-                    new_layer_shape = curr_layer.shape()[1] * curr_layer.shape()[2] * curr_layer.shape()[3]
+                if len(curr_layer.shape) != 2:  # if not a 2-D Tensor
+                    new_layer_shape = curr_layer.shape[1].value \
+                                      * curr_layer.shape[2].value \
+                                      * curr_layer.shape[3].value
                     curr_layer = tf.reshape(curr_layer, [-1, new_layer_shape], name="flatten")
+
                 curr_layer = tf.layers.dense(curr_layer,
                                              units=layer[self.LAYER_LAYOUT_UNITS_KEY],
                                              activation=tf.nn.relu if layer[self.LAYER_LAYOUT_ACT_KEY] else None,
@@ -59,19 +66,19 @@ class CnnModel:
                                              bias_initializer=tf.zeros_initializer(),
                                              name="full" + str(i+1))
             elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_DROP:
-                curr_layer = tf.nn.dropout(curr_layer, self._keep_prob, name="drop")
+                curr_layer = tf.nn.dropout(curr_layer, self._keep_prob[0], name="drop")
 
-            logits = curr_layer  # the last layer output Tensor contains the logits
+        logits = curr_layer  # the last layer output Tensor contains the logits
 
-            pred_op = self._add_predict_op(logits)
-            self._add_accuracy_sum(pred_op, self._y)
+        pred_op = self._add_predict_op(logits)
+        self._add_accuracy_sum(pred_op, self._y)
 
-            loss_op = self._add_loss_op(logits, self._y)
+        loss_op = self._add_loss_op(logits, self._y)
 
-            # learning rate (lr) is defined as a tf Variable
-            # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
-            self._lr = tf.Variable(initial_value=[0.001], trainable=False, name="learning_rate")
-            self._train_op = self._add_train_op(loss_op)
+        # learning rate (lr) is defined as a tf Variable
+        # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
+        self._lr = tf.Variable(initial_value=[0.001], trainable=False, name="learning_rate")
+        self._train_op = self._add_train_op(loss_op)
 
     def _create_placeholders(self):
         with self._graph.as_default():
@@ -89,7 +96,7 @@ class CnnModel:
                            filter_size=5,  # filter is a square
                            mp_size=2):  # max pool size
         with self._graph.as_default():
-            with tf.name_scope("conv" + layer_number):
+            with tf.name_scope("conv" + str(layer_number)):
                 w = tf.Variable(tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], stddev=0.1),
                                 name="w")
                 b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
@@ -105,12 +112,12 @@ class CnnModel:
         with tf.name_scope("predict"):
             return tf.argmax(logits, axis=1, name="pred")
 
-    @staticmethod
-    def _add_accuracy_sum(pred, labels):
+    def _add_accuracy_sum(self, pred, labels):
         with tf.name_scope("accuracy"):
-            correct_prediction = tf.equal(pred, tf.argmax(labels, 1))
+            correct_prediction = tf.equal(pred, tf.argmax(labels, axis=1))
+            print("correct_prediction.shape:", correct_prediction.shape)
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-            tf.summary.scalar("accuracy", accuracy)
+            self._accuracy_sum = tf.summary.scalar("accuracy", accuracy, collections=["xval"])
 
     @staticmethod
     def _add_loss_op(logits, labels):
@@ -129,11 +136,15 @@ class CnnModel:
     #
     #
     def train(self, inputs, labels, training_program,
+              event_file_dir,  # driectory tf summaries are written to
               batch=50,  # batch size
               val_set_size=0.1,  # cross validation set size, percentage
               keep_prob=0.5,  # keep probability, percentage of units kept while performing dropouts
               report_freq=100  # report frequency, number of training steps after which summaries are written
               ):
+        # instantiate tf summaries file writer
+        writer = tf.summary.FileWriter(self._build_event_filename(event_file_dir), graph=self._graph)
+
         print("Training started")
         print("Data set size id %d. Batch size is %d." % (inputs.shape[0], batch))
 
@@ -157,6 +168,9 @@ class CnnModel:
         sess.run(tf.global_variables_initializer())
 
         with self._graph.as_default():
+
+            # merge summaries for x-validation step
+            sum_val = tf.summary.merge_all("xval")
 
             # for each step of the training program...
             for i, program_step in enumerate(training_program):
@@ -187,10 +201,12 @@ class CnnModel:
 
                         # every 100 steps compute accuracy on validation set
                         if step % report_freq == 0:
-                            # TODO write accuracy sum to event file
-                            pass
-                            # sum_val = sess.run(self._train_op, feed_dict=fd_val)
-                            # writer.add_summary(sum_val, step)
-                            # print("Step %d completed" % step)
+                            accu = sess.run(sum_val, feed_dict=fd_val)
+                            # TODO introduce tf Variable "global_Step"
+                            writer.add_summary(accu, step)
 
                     print("- epoch %d out of %d completed" % (epoch + 1, curr_epochs))
+
+    def _build_event_filename(self, dir_):
+        current_dt = time.strftime("%Y%m%d-%H%M%S")
+        return dir_ + "-" + self.EVENT_DIR_BASE_NAME + "-" + current_dt
