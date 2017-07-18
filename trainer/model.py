@@ -32,80 +32,85 @@ class CnnModel:
     #
     def _create_graph(self, layers_layout):
         self._graph = tf.Graph()
-        self._create_placeholders()
-        curr_layer = self._x
 
-        # TODO can use curr_layer.shape[3] size instead ?
-        curr_layer_depth = 1
-        for i, layer in enumerate(layers_layout):
-            # create convolutional layer
-            if layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_TYPE_CONV:
-                curr_layer = self._create_conv_layer(layer_number=i+1,
-                                                     inputs=curr_layer,
-                                                     in_channels=curr_layer_depth,
-                                                     out_channels=layer[self.LAYER_LAYOUT_DEPTH_KEY],
-                                                     filter_size=layer[self.LAYER_LAYOUT_FILTER_KEY],
-                                                     mp_size=layer[self.LAYER_LAYOUT_MP_KEY])
-                curr_layer_depth = layer[self.LAYER_LAYOUT_DEPTH_KEY]
+        with self._graph.as_default():
+            self._create_placeholders()
+            curr_layer = self._x
 
-            # create fully connected layer
-            elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_TYPE_FULL:
-                # flatten the previous layer output Tensor if not in 2-D
-                # for instance, if Tensor shape is [n, 7, 7, 64], reshapes it to [n, 7*7*64]
-                if len(curr_layer.shape) != 2:  # if not a 2-D Tensor
-                    new_layer_shape = curr_layer.shape[1].value \
-                                      * curr_layer.shape[2].value \
-                                      * curr_layer.shape[3].value
-                    curr_layer = tf.reshape(curr_layer, [-1, new_layer_shape], name="flatten")
+            # TODO can use curr_layer.shape[3] size instead ?
+            curr_layer_depth = 1
+            layer_num = 1  # layer number
+            for _, layer in enumerate(layers_layout):
+                # create convolutional layer
+                if layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_TYPE_CONV:
+                    curr_layer = self._create_conv_layer(layer_number=layer_num,
+                                                         inputs=curr_layer,
+                                                         in_channels=curr_layer_depth,
+                                                         out_channels=layer[self.LAYER_LAYOUT_DEPTH_KEY],
+                                                         filter_size=layer[self.LAYER_LAYOUT_FILTER_KEY],
+                                                         mp_size=layer[self.LAYER_LAYOUT_MP_KEY])
+                    curr_layer_depth = layer[self.LAYER_LAYOUT_DEPTH_KEY]
+                    layer_num += 1
 
-                curr_layer = tf.layers.dense(curr_layer,
-                                             units=layer[self.LAYER_LAYOUT_UNITS_KEY],
-                                             activation=tf.nn.relu if layer[self.LAYER_LAYOUT_ACT_KEY] else None,
-                                             use_bias=True,
-                                             kernel_initializer=tf.truncated_normal_initializer(stddev=0.1),
-                                             bias_initializer=tf.zeros_initializer(),
-                                             name="full" + str(i+1))
-            elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_DROP:
-                curr_layer = tf.nn.dropout(curr_layer, self._keep_prob[0], name="drop")
+                # create fully connected layer
+                elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_TYPE_FULL:
+                    # flatten the previous layer output Tensor if not in 2-D
+                    # for instance, if Tensor shape is [n, 7, 7, 64], reshapes it to [n, 7*7*64]
+                    if len(curr_layer.shape) != 2:  # if not a 2-D Tensor
+                        new_layer_shape = curr_layer.shape[1].value \
+                                          * curr_layer.shape[2].value \
+                                          * curr_layer.shape[3].value
+                        curr_layer = tf.reshape(curr_layer, [-1, new_layer_shape], name="flatten")
 
-        logits = curr_layer  # the last layer output Tensor contains the logits
+                    curr_layer = tf.layers.dense(curr_layer,
+                                                 units=layer[self.LAYER_LAYOUT_UNITS_KEY],
+                                                 activation=tf.nn.relu if layer[self.LAYER_LAYOUT_ACT_KEY] else None,
+                                                 use_bias=True,
+                                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.1),
+                                                 bias_initializer=tf.zeros_initializer(),
+                                                 name="full" + str(layer_num))
+                    layer_num += 1
 
-        pred_op = self._add_predict_op(logits)
-        self._add_accuracy_sum(pred_op, self._y)
+                # dropouts
+                elif layer[self.LAYER_LAYOUT_TYPE_KEY] == self.LAYER_LAYOUT_DROP:
+                    curr_layer = tf.nn.dropout(curr_layer, self._keep_prob, name="drop")
 
-        loss_op = self._add_loss_op(logits, self._y)
+            logits = curr_layer  # the last layer output Tensor contains the logits
 
-        # learning rate (lr) is defined as a tf Variable
-        # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
-        self._lr = tf.Variable(initial_value=[0.001], trainable=False, name="learning_rate")
-        self._train_op = self._add_train_op(loss_op)
+            pred_op = self._add_predict_op(logits)
+            self._add_accuracy_sum(pred_op, self._y)
+
+            loss_op = self._add_loss_op(logits, self._y)
+
+            # learning rate (lr) is defined as a tf Variable
+            # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
+            self._lr = tf.Variable(initial_value=0.001, trainable=False, name="learning_rate")
+            self._train_op = self._add_train_op(loss_op)
 
     def _create_placeholders(self):
-        with self._graph.as_default():
-            with tf.name_scope("placeholder"):
-                self._x = tf.placeholder(tf.float32, shape=[None, self.IMAGE_H, self.IMAGE_W, self.IMAGE_C], name="x")
-                self._y = tf.placeholder(tf.float32, shape=[None, self.LABELS], name="y")
-                # percentage of units to keep in the dropout layer (keep probability)
-                self._keep_prob = tf.placeholder(tf.float32, shape=[1], name="keep_prob")
+        with tf.name_scope("placeholder"):
+            self._x = tf.placeholder(tf.float32, shape=[None, self.IMAGE_H, self.IMAGE_W, self.IMAGE_C], name="x")
+            self._y = tf.placeholder(tf.float32, shape=[None, self.LABELS], name="y")
+            # percentage of units to keep in the dropout layer (keep probability)
+            self._keep_prob = tf.placeholder(tf.float32, shape=[], name="keep_prob")
 
-    def _create_conv_layer(self,
-                           layer_number,  # integer, conv layer # (1, 2, 3, ...)
+    @staticmethod
+    def _create_conv_layer(layer_number,  # integer, conv layer # (1, 2, 3, ...)
                            inputs,  # Tensor, output of the previous layer
                            in_channels,  # integer, depth of the previous layer
                            out_channels,  # integer, depth of the output Tensor
                            filter_size=5,  # filter is a square
                            mp_size=2):  # max pool size
-        with self._graph.as_default():
-            with tf.name_scope("conv" + str(layer_number)):
-                w = tf.Variable(tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], stddev=0.1),
-                                name="w")
-                b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
-                # conv op output Tensor shape is N*IMAGE_H*IMAGE_W*out_channels
-                conv = tf.nn.conv2d(inputs, w, strides=[1, 1, 1, 1], padding="SAME", name="conv")
-                relu = tf.nn.relu(conv + b, name="relu")
-                # max pooling op output shape is N* IMAGE_H/2 * IMAGE_W/2 * out_channels
-                return tf.nn.max_pool(relu, ksize=[1, mp_size, mp_size, 1],
-                                      strides=[1, mp_size, mp_size, 1], padding="SAME")
+        with tf.name_scope("conv" + str(layer_number)):
+            w = tf.Variable(tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], stddev=0.1),
+                            name="w")
+            b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
+            # conv op output Tensor shape is N*IMAGE_H*IMAGE_W*out_channels
+            conv = tf.nn.conv2d(inputs, w, strides=[1, 1, 1, 1], padding="SAME", name="conv")
+            relu = tf.nn.relu(conv + b, name="relu")
+            # max pooling op output shape is N* IMAGE_H/2 * IMAGE_W/2 * out_channels
+            return tf.nn.max_pool(relu, ksize=[1, mp_size, mp_size, 1],
+                                  strides=[1, mp_size, mp_size, 1], padding="SAME")
 
     @staticmethod
     def _add_predict_op(logits):
@@ -115,7 +120,6 @@ class CnnModel:
     def _add_accuracy_sum(self, pred, labels):
         with tf.name_scope("accuracy"):
             correct_prediction = tf.equal(pred, tf.argmax(labels, axis=1))
-            print("correct_prediction.shape:", correct_prediction.shape)
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
             self._accuracy_sum = tf.summary.scalar("accuracy", accuracy, collections=["xval"])
 
@@ -163,11 +167,12 @@ class CnnModel:
                   self._y: labels_val,
                   self._keep_prob: 1.0}  # no dropout when x-validating
 
-        print("Session started")
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-
         with self._graph.as_default():
+
+            print("-----------------\n" +
+                  "Session started")
+            sess = tf.Session()
+            sess.run(tf.global_variables_initializer())
 
             # merge summaries for x-validation step
             sum_val = tf.summary.merge_all("xval")
@@ -177,7 +182,7 @@ class CnnModel:
                 curr_epochs = program_step[self.TRAIN_PROG_EPOCHS]
                 curr_lr = program_step[self.TRAIN_PROG_LR]
 
-                print("Training step %d out of %d. Learning rate is %d. Epochs is %d." %
+                print("Training step %d out of %d. Learning rate is %3.1E. Epochs is %d." %
                       (i+1,
                        len(training_program),
                        curr_lr,
@@ -209,4 +214,4 @@ class CnnModel:
 
     def _build_event_filename(self, dir_):
         current_dt = time.strftime("%Y%m%d-%H%M%S")
-        return dir_ + "-" + self.EVENT_DIR_BASE_NAME + "-" + current_dt
+        return dir_ + current_dt + "-" + self.EVENT_DIR_BASE_NAME
