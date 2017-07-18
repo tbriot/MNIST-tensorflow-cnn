@@ -44,28 +44,31 @@ def load_data_from_file(filename, rows=2000):
 def main():
 
     # load data set
-    data, labels = load_data_from_file(TRAIN_SET, rows=20000)
+    data, labels = load_data_from_file(TRAIN_SET, rows=50000)
 
     # define our CNN model layout
     layers_layout = [{"type": "conv", "filter_size": 5, "depth": 6,  "mp_size": 2},
-                     {"type": "conv", "filter_size": 5, "depth": 12, "mp_size": 2},
+                     {"type": "conv", "filter_size": 5, "depth": 16, "mp_size": 2},
                      {"type": "drop"},
-                     {"type": "full", "units": 48, "activation": True},
-                     {"type": "full", "units": 24, "activation": True},
+                     {"type": "full", "units": 120, "activation": True},
+                     {"type": "full", "units": 84, "activation": True},
                      {"type": "full", "units": 10, "activation": False}]
 
     # build the model
     model = m.CnnModel(layers_layout)
 
-    training_program = [{"lr": 1E-3, "epochs": 1},
-                        {"lr": 5E-4, "epochs": 1}]
+    training_program = [{"lr": 1E-3, "epochs": 2},
+                        {"lr": 5E-4, "epochs": 3},
+                        {"lr": 1E-4, "epochs": 4},
+                        {"lr": 5E-5, "epochs": 5}]
     model.train(data, labels,
                 training_program=training_program,
                 event_file_dir=EVENTS_DIR,
                 batch=100,
                 val_set_size=0.1,
                 keep_prob=0.5,
-                report_freq=100)
+                report_freq=100,
+                debug=False)
 
 if __name__ == "__main__":
     main()

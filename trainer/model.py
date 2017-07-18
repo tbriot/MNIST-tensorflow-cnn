@@ -2,6 +2,8 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import time
 
+# TODO add checkpoints
+
 
 class CnnModel:
 
@@ -82,10 +84,11 @@ class CnnModel:
 
             loss_op = self._add_loss_op(logits, self._y)
 
-            # learning rate (lr) is defined as a tf Variable
-            # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
-            self._lr = tf.Variable(initial_value=0.001, trainable=False, name="learning_rate")
             self._train_op = self._add_train_op(loss_op)
+
+            # log weights of all trainable variables in the tf event file
+            for var in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+                tf.summary.histogram(var.name + "-sum", var, collections=["debug"])
 
     def _create_placeholders(self):
         with tf.name_scope("placeholder"):
@@ -105,6 +108,7 @@ class CnnModel:
             w = tf.Variable(tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], stddev=0.1),
                             name="w")
             b = tf.Variable(tf.constant(0.1, shape=[out_channels]), name="b")
+
             # conv op output Tensor shape is N*IMAGE_H*IMAGE_W*out_channels
             conv = tf.nn.conv2d(inputs, w, strides=[1, 1, 1, 1], padding="SAME", name="conv")
             relu = tf.nn.relu(conv + b, name="relu")
@@ -121,7 +125,7 @@ class CnnModel:
         with tf.name_scope("accuracy"):
             correct_prediction = tf.equal(pred, tf.argmax(labels, axis=1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-            self._accuracy_sum = tf.summary.scalar("accuracy", accuracy, collections=["xval"])
+            self._accuracy_sum = tf.summary.scalar("accuracy", accuracy, collections=["xval", "debug"])
 
     @staticmethod
     def _add_loss_op(logits, labels):
@@ -131,7 +135,16 @@ class CnnModel:
 
     def _add_train_op(self, loss):
         with tf.name_scope("train"):
-            return tf.train.AdamOptimizer(self._lr).minimize(loss, name="train_op")
+            # learning rate (lr) is defined as a tf Variable
+            # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
+            self._lr = tf.Variable(initial_value=0.001, trainable=False, name="learning_rate")
+
+            # log learning rate variable in the tf event file
+            tf.summary.scalar("learning-rate", self._lr, collections=["debug"])
+
+            # _global_step variable is a counter incremented at each call to the minimize() function
+            self._global_step = tf.Variable(initial_value=0, trainable=False, name="global_step")
+            return tf.train.AdamOptimizer(self._lr).minimize(loss,  global_step=self._global_step, name="train_op")
 
     # Example:
     # training_program = [{"lr": 1E-3, "epochs":2},
@@ -144,7 +157,8 @@ class CnnModel:
               batch=50,  # batch size
               val_set_size=0.1,  # cross validation set size, percentage
               keep_prob=0.5,  # keep probability, percentage of units kept while performing dropouts
-              report_freq=100  # report frequency, number of training steps after which summaries are written
+              report_freq=100,  # report frequency, number of training steps after which summaries are written
+              debug=False  # if debug mode is enabled, detailed summaries are logged to the tf event files
               ):
         # instantiate tf summaries file writer
         writer = tf.summary.FileWriter(self._build_event_filename(event_file_dir), graph=self._graph)
@@ -175,7 +189,8 @@ class CnnModel:
             sess.run(tf.global_variables_initializer())
 
             # merge summaries for x-validation step
-            sum_val = tf.summary.merge_all("xval")
+            sum_coll = "xval" if not debug else "debug"  # log more summaries if in debug mode
+            sum_val = tf.summary.merge_all(sum_coll)
 
             # for each step of the training program...
             for i, program_step in enumerate(training_program):
@@ -189,7 +204,7 @@ class CnnModel:
                        curr_epochs))
 
                 # update the learning rate
-                self._lr.assign(curr_lr)
+                sess.run(self._lr.assign(curr_lr))
 
                 for epoch in range(curr_epochs):
                     for step in range(steps_per_epoch):
@@ -201,14 +216,13 @@ class CnnModel:
                               self._y: batch_labels,
                               self._keep_prob: keep_prob}
 
-                        # train the model
-                        sess.run(self._train_op, feed_dict=fd)
+                        # train the model and get the global step
+                        _, gstep = sess.run([self._train_op, self._global_step], feed_dict=fd)
 
                         # every 100 steps compute accuracy on validation set
-                        if step % report_freq == 0:
+                        if gstep % report_freq == 0:
                             accu = sess.run(sum_val, feed_dict=fd_val)
-                            # TODO introduce tf Variable "global_Step"
-                            writer.add_summary(accu, step)
+                            writer.add_summary(accu, gstep)
 
                     print("- epoch %d out of %d completed" % (epoch + 1, curr_epochs))
 
