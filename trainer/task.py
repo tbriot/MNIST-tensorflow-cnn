@@ -7,6 +7,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 ROOTDIR = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST-tensorflow-cnn/"
 DATADIR = ROOTDIR + "data/"
+CHECKPOINT_DIR = ROOTDIR + "tf-model-checkpoint/"
 TRAIN_SET = DATADIR + "train.csv"
 EVENTS_DIR = ROOTDIR + "tf-event-files/"
 
@@ -57,13 +58,20 @@ def main():
     # build the model
     model = m.CnnModel(layers_layout)
 
-    training_program = [{"lr": 1E-3, "epochs": 2},
-                        {"lr": 5E-4, "epochs": 3},
-                        {"lr": 1E-4, "epochs": 4},
-                        {"lr": 5E-5, "epochs": 5}]
+    """
+    training_program = [{"lr": 1E-3, "epochs": 3},
+                        {"lr": 5E-4, "epochs": 4},
+                        {"lr": 1E-4, "epochs": 5},
+                        {"lr": 5E-5, "epochs": 6}]
+    """
+
+    training_program = [{"lr": 1E-6, "epochs": 5}]
+
     model.train(data, labels,
                 training_program=training_program,
                 event_file_dir=EVENTS_DIR,
+                chk_file_dir=CHECKPOINT_DIR,
+                load_last_chkp=True,
                 batch=100,
                 val_set_size=0.1,
                 keep_prob=0.5,

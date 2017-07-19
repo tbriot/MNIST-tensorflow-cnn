@@ -22,6 +22,7 @@ class CnnModel:
     TRAIN_PROG_EPOCHS = "epochs"  # training program epochs
 
     EVENT_DIR_BASE_NAME = "cnn-model"  # name of the directory storing event files produced by tf summaries
+    CHKP_DIR_BASE_NAME = EVENT_DIR_BASE_NAME  # name of the model checkpoint filename
 
     def __init__(self, layers_layout):
         self._create_graph(layers_layout)
@@ -153,7 +154,9 @@ class CnnModel:
     #
     #
     def train(self, inputs, labels, training_program,
-              event_file_dir,  # driectory tf summaries are written to
+              event_file_dir,  # directory tf summaries are written to
+              chk_file_dir,  # checkpoint directory
+              load_last_chkp=True,  # load last checkpoint from disk
               batch=50,  # batch size
               val_set_size=0.1,  # cross validation set size, percentage
               keep_prob=0.5,  # keep probability, percentage of units kept while performing dropouts
@@ -183,10 +186,17 @@ class CnnModel:
 
         with self._graph.as_default():
 
+            # create a saver to persist the trained model on disk
+            saver = tf.train.Saver()
+
             print("-----------------\n" +
                   "Session started")
             sess = tf.Session()
             sess.run(tf.global_variables_initializer())
+
+            # load latest checkpoint from disk
+            if load_last_chkp:
+                saver.restore(sess, tf.train.latest_checkpoint(chk_file_dir))
 
             # merge summaries for x-validation step
             sum_coll = "xval" if not debug else "debug"  # log more summaries if in debug mode
@@ -226,6 +236,14 @@ class CnnModel:
 
                     print("- epoch %d out of %d completed" % (epoch + 1, curr_epochs))
 
+                # save model to disk once each time a training program step is completed
+                saver.save(sess, self._build_chkp_filename(chk_file_dir, curr_lr, i))
+                print("Trained model saved to disk")
+
     def _build_event_filename(self, dir_):
         current_dt = time.strftime("%Y%m%d-%H%M%S")
         return dir_ + current_dt + "-" + self.EVENT_DIR_BASE_NAME
+
+    def _build_chkp_filename(self, dir_, curr_lr, i):
+        current_dt = time.strftime("%Y%m%d-%H%M%S")
+        return dir_ + "%s-%s-pass%d-lr%1.0E" % (current_dt, self.CHKP_DIR_BASE_NAME, i, curr_lr)
