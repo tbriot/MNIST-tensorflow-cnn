@@ -40,8 +40,8 @@ def load_data_from_file(filename, rows=2000):
     labels = pd.get_dummies(labels)  # convert labels into one-hot vectors
 
     # convert pandas Dataframes into float32 numpy arrays
-    data = data.values.astype(np.float32)
     labels = labels.values.astype(np.float32)
+    data = data.values.astype(np.float32)
 
     data = normalize_data(data)  # set data mean=0 and std dev=1
     data = data.reshape(-1, IMAGE_H, IMAGE_W, IMAGE_C)  # reshape to NHWC format

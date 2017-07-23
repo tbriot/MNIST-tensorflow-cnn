@@ -1,2 +1,2 @@
-model_checkpoint_path: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST-tensorflow-cnn/tf-model-checkpoint/20170712-184934-LeNet5-LR-1E-5-pass6"
-all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST-tensorflow-cnn/tf-model-checkpoint/20170712-184934-LeNet5-LR-1E-5-pass6"
+model_checkpoint_path: "C:\\Users\\Timo\\PycharmProjects\\Kaggle\\MNIST-tensorflow-cnn\\tf-model-checkpoint\\20170719-214026-cnn-model-pass0-lr1E-03"
+all_model_checkpoint_paths: "C:\\Users\\Timo\\PycharmProjects\\Kaggle\\MNIST-tensorflow-cnn\\tf-model-checkpoint\\20170719-214026-cnn-model-pass0-lr1E-03"
