@@ -1,5 +1,6 @@
 import trainer.input_pipeline as ip
 import trainer.model as m
+import trainer.eval_hook as h
 import tensorflow as tf
 import os
 
@@ -18,6 +19,14 @@ def run(filename, layers_layout):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
+    eval_hook = h.EvalSessionHook()
+    scaf = tf.train.Scaffold(init_op=init_op)
+
+    with tf.train.SingularMonitoredSession(hooks=[eval_hook], scaffold=scaf) as sess:
+        while not sess.should_stop():
+            sess.run(train_op)
+
+    """
     # Create a session for running operations in the Graph.
     sess = tf.Session()
     # Initialize variables
@@ -43,7 +52,7 @@ def run(filename, layers_layout):
         # Wait for threads to finish.
     coord.join(threads)
     sess.close()
-
+    """
 
 # define our CNN model layout
 layers = [{"type": "conv", "filter_size": 5, "depth": 6, "mp_size": 2},
