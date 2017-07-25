@@ -10,15 +10,16 @@ EXAMPLE_QUEUE_MIN_THRESHOLD = 0.4
 EXAMPLE_QUEUE_NUM_THREADS = 1
 
 
-def preprocess_features(features):
+def preprocess_features(features, labels):
     """
     :param features: 2-D Tensor. shape is [N, 784]  (H*W*C = 28*28*1 = 784)
     :return: 4-D Tensor. shape is [N, 28, 28, 1]
     """
     # TODO tf.nn.batch_normalization ?
     features = tf.reshape(features, [-1, 28, 28, 1])
+    labels = tf.one_hot(tf.cast(labels, tf.int32), 10)
 
-    return features
+    return features, labels
 
 
 def read_file(
@@ -34,14 +35,14 @@ def read_file(
         # first column contains the label (digit from '0' to '9')
         # followed by 784 columns, one for each pixel (28x28 image)
         features = tf.decode_csv(rows, record_defaults=records_defaults)
-        label = features.pop(0)
+        labels = features.pop(0)
 
-        return preprocess_features(features), label
+        return preprocess_features(features, labels)
 
 
 def batch(
         features,
-        label,
+        labels,
         batch_size,
         shuffle=True):
 
@@ -50,14 +51,14 @@ def batch(
 
     if shuffle:
         features_batch, label_batch = tf.train.shuffle_batch(
-            [features, label],
+            [features, labels],
             batch_size=batch_size,
             capacity=capacity,
             min_after_dequeue=min_after_dequeue,
             enqueue_many=True)
     else:
         features_batch, label_batch = tf.train.batch(
-            [features, label],
+            [features, labels],
             batch_size=batch_size,
             num_threads=EXAMPLE_QUEUE_NUM_THREADS,
             capacity=capacity,
@@ -78,6 +79,6 @@ def input_pipeline(
         # create filename queue
         filename_queue = tf.train.string_input_producer([filename], num_epochs=num_epochs)
         # read, parse the file and preprocess the input data
-        features, label = read_file(filename_queue, batch_size)
+        features, labels = read_file(filename_queue, batch_size)
         # create another queue to batch together examples
-        return batch(features, label, batch_size, shuffle)
+        return batch(features, labels, batch_size, shuffle)
