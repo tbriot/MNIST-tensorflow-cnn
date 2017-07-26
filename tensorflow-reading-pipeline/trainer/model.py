@@ -1,4 +1,5 @@
 import tensorflow as tf
+import trainer.training_util as u
 
 IMAGE_H, IMAGE_W, IMAGE_C = 28, 28, 1  # height, width, channels (grayscale = just one channel)
 LABELS = 10
@@ -29,7 +30,7 @@ def cnn_model(features,
         keep_prob = tf.constant(keep_prob, tf.float32, shape=[], name="keep_prob")
 
         # global_step variable is a counter incremented at each call to the minimize() function
-        global_step = tf.Variable(initial_value=0, trainable=False, name="global_step")
+        tf.train.create_global_step()
 
         curr_layer = features
         curr_layer_depth = 1
@@ -108,7 +109,7 @@ def _add_accuracy_ops(pred, labels):
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(pred, tf.argmax(labels, axis=1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-        tf.summary.scalar("accuracy", accuracy, collections=["xval", "debug"])
+        tf.summary.scalar("accuracy", accuracy, collections=[u.EVAL_SUMMARY_OP, "debug"])
 
 
 def _add_loss_op(logits, labels):
