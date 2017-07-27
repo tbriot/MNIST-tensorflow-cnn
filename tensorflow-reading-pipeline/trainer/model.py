@@ -30,7 +30,7 @@ def cnn_model(features,
         keep_prob = tf.constant(keep_prob, tf.float32, shape=[], name="keep_prob")
 
         # global_step variable is a counter incremented at each call to the minimize() function
-        tf.train.create_global_step()
+        global_step = tf.train.create_global_step()
 
         curr_layer = features
         curr_layer_depth = 1

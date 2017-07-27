@@ -1,15 +1,15 @@
 import trainer.input_pipeline as ip
 import trainer.model as m
-import trainer.eval_hook as h
+import trainer.eval_listener as h
 import tensorflow as tf
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
-def run(filename, layers_layout):
+def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
     features, labels = ip.input_pipeline(
-        filename,
+        train_filename,
         num_epochs=2,
         batch_size=50,
         shuffle=True)
@@ -19,10 +19,22 @@ def run(filename, layers_layout):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
 
-    eval_hook = h.EvalSessionHook()
+    chpkt_listener = h.EvalCheckpointSaverListener(
+        layers_layout,
+        eval_filename,
+        chkpt_dir,
+        event_dir
+    )
+
+    chkpt_hook = tf.train.CheckpointSaverHook(
+        chkpt_dir,
+        save_steps=500,
+        listeners=[chpkt_listener]
+    )
+
     scaf = tf.train.Scaffold(init_op=init_op)
 
-    with tf.train.SingularMonitoredSession(hooks=[eval_hook], scaffold=scaf) as sess:
+    with tf.train.SingularMonitoredSession(hooks=[chkpt_hook], scaffold=scaf) as sess:
         while not sess.should_stop():
             sess.run(train_op)
 
@@ -54,13 +66,18 @@ def run(filename, layers_layout):
     sess.close()
     """
 
+
 # define our CNN model layout
 layers = [{"type": "conv", "filter_size": 5, "depth": 6, "mp_size": 2},
-                 {"type": "conv", "filter_size": 5, "depth": 16, "mp_size": 2},
-                 {"type": "drop"},
-                 {"type": "full", "units": 120, "activation": True},
-                 {"type": "full", "units": 84, "activation": True},
-                 {"type": "full", "units": 10, "activation": False}]
+          {"type": "conv", "filter_size": 5, "depth": 16, "mp_size": 2},
+          {"type": "drop"},
+          {"type": "full", "units": 120, "activation": True},
+          {"type": "full", "units": 84, "activation": True},
+          {"type": "full", "units": 10, "activation": False}]
+
+chkpt_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint"
+event_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-event-files"
 
 train_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/train.csv"
-run(train_file, layers)
+eval_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/eval.csv"
+run(train_file, eval_file, layers, chkpt_dir, event_dir)
