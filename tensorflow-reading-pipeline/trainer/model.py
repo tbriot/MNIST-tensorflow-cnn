@@ -73,10 +73,11 @@ def cnn_model(features,
 
         logits = curr_layer  # the last layer output Tensor contains the logits
 
-        pred_op = tf.argmax(logits, axis=1, name="predict")
+        pred_op = tf.argmax(logits, axis=1)
         _add_accuracy_ops(pred_op, labels)
 
         loss_op = _add_loss_op(logits, labels)
+
         train_op = _add_train_op(loss_op, global_step)
 
         # log weights of all trainable variables in the tf event file
@@ -114,8 +115,9 @@ def _add_accuracy_ops(pred, labels):
 
 def _add_loss_op(logits, labels):
     with tf.name_scope("loss"):
-        return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels),
-                              name="xent")
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels), name="xent")
+        tf.summary.scalar("loss", loss, collections=["debug"])
+        return loss
 
 
 def _add_train_op(loss, global_step):

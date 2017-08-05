@@ -3,18 +3,26 @@ import trainer.model as m
 import trainer.eval_listener as h
 import tensorflow as tf
 import os
+import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
+
     features, labels = ip.input_pipeline(
         train_filename,
-        num_epochs=2,
+        num_epochs=1,
         batch_size=50,
-        shuffle=True)
+        shuffle=False)
 
-    train_op, global_step = m.cnn_model(features, labels, layers_layout, keep_prob=0.5)
+    train_op, global_step = m.cnn_model(features, labels, layers_layout, keep_prob=1)
+
+    current_dt = time.strftime("%Y%m%d-%H%M%S")
+    file_writer = tf.summary.FileWriter(
+        os.path.join(event_dir, current_dt + '-eval-train'),
+        train_op.graph)
+    summary_op = tf.summary.merge_all("debug")
 
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
@@ -36,7 +44,12 @@ def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
 
     with tf.train.SingularMonitoredSession(hooks=[chkpt_hook], scaffold=scaf) as sess:
         while not sess.should_stop():
-            sess.run(train_op)
+            _, summ, gs = sess.run([train_op, summary_op, global_step])
+            file_writer.add_summary(summ, global_step=gs)
+            # fc5, lab = sess.run(["full5/BiasAdd:0", "lab_run:0", train_op])[0:2]
+            # print(fc5.dtype, lab.dtype)
+            # feat = sess.run(["input_pipeline/feat:0", train_op])[0:1]
+            # print(feat)
 
     """
     # Create a session for running operations in the Graph.

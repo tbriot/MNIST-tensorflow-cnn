@@ -13,6 +13,7 @@ EXAMPLE_QUEUE_NUM_THREADS = 1
 def preprocess_features(features, labels):
     """
     :param features: 2-D Tensor. shape is [N, 784]  (H*W*C = 28*28*1 = 784)
+    :param labels: 2-D Tensor. shape is [N, 10]  (10 classes)
     :return: 4-D Tensor. shape is [N, 28, 28, 1]
     """
     # TODO tf.nn.batch_normalization ?
@@ -36,6 +37,7 @@ def read_file(
         # followed by 784 columns, one for each pixel (28x28 image)
         features = tf.decode_csv(rows, record_defaults=records_defaults)
         labels = features.pop(0)
+        features = tf.stack(features, axis=1)
 
         return preprocess_features(features, labels)
 

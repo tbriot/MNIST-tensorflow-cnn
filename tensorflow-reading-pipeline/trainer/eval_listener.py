@@ -1,5 +1,6 @@
 import tensorflow as tf
 import os
+import time
 
 import trainer.training_util as u
 import trainer.input_pipeline as ip
@@ -20,8 +21,9 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
 
         self._saver = tf.train.Saver()
 
+        current_dt = time.strftime("%Y%m%d-%H%M%S")
         self._file_writer = tf.summary.FileWriter(
-            os.path.join(event_dir, 'eval'), graph=self._graph)
+            os.path.join(event_dir, current_dt + '-eval'), graph=self._graph)
 
         with self._graph.as_default():
             features, labels = ip.input_pipeline(
@@ -31,7 +33,8 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
                 shuffle=False)
 
             m.cnn_model(features, labels, layers_layout, keep_prob=1)
-            self._summary_op = tf.summary.merge_all(u.EVAL_SUMMARY_OP)
+            #self._summary_op = tf.summary.merge_all(u.EVAL_SUMMARY_OP)
+            self._summary_op = tf.summary.merge_all("debug")
 
     def after_save(self,
                   session,
