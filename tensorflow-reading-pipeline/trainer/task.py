@@ -1,6 +1,7 @@
 import trainer.input_pipeline as ip
 import trainer.model as m
 import trainer.eval_listener as h
+import trainer.update_lr_hook as lr
 import tensorflow as tf
 import os
 import time
@@ -8,11 +9,11 @@ import time
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
-def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
+def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir, training_program):
 
     features, labels = ip.input_pipeline(
         train_filename,
-        num_epochs=1,
+        num_epochs=3,
         batch_size=50,
         shuffle=False)
 
@@ -34,6 +35,13 @@ def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
         event_dir
     )
 
+    # create hook that updates the learning rate after each epoch
+    # the learning rate decay is defined in the 'training_program'
+    update_lr_hook = lr.UpdateLrSessionRunHook(
+        training_program,
+        tf.get_default_graph()
+    )
+
     chkpt_hook = tf.train.CheckpointSaverHook(
         chkpt_dir,
         save_steps=500,
@@ -42,7 +50,7 @@ def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir):
 
     scaf = tf.train.Scaffold(init_op=init_op)
 
-    with tf.train.SingularMonitoredSession(hooks=[chkpt_hook], scaffold=scaf) as sess:
+    with tf.train.SingularMonitoredSession(hooks=[chkpt_hook, update_lr_hook], scaffold=scaf) as sess:
         while not sess.should_stop():
             _, summ, gs = sess.run([train_op, summary_op, global_step])
             file_writer.add_summary(summ, global_step=gs)
@@ -88,9 +96,12 @@ layers = [{"type": "conv", "filter_size": 5, "depth": 6, "mp_size": 2},
           {"type": "full", "units": 84, "activation": True},
           {"type": "full", "units": 10, "activation": False}]
 
-chkpt_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint"
-event_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-event-files"
+my_training_program = [{"lr": 1E-3, "epochs": 1},
+                       {"lr": 5E-4, "epochs": 2}]
 
-train_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/train.csv"
-eval_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/eval.csv"
-run(train_file, eval_file, layers, chkpt_dir, event_dir)
+my_chkpt_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint"
+my_event_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-event-files"
+
+my_train_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/train.csv"
+my_eval_file = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/data/eval.csv"
+run(my_train_file, my_eval_file, layers, my_chkpt_dir, my_event_dir, my_training_program)

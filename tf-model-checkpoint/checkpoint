@@ -1,2 +1,6 @@
-model_checkpoint_path: "C:\\Users\\Timo\\PycharmProjects\\Kaggle\\MNIST-tensorflow-cnn\\tf-model-checkpoint\\20170719-214026-cnn-model-pass0-lr1E-03"
-all_model_checkpoint_paths: "C:\\Users\\Timo\\PycharmProjects\\Kaggle\\MNIST-tensorflow-cnn\\tf-model-checkpoint\\20170719-214026-cnn-model-pass0-lr1E-03"
+model_checkpoint_path: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-2160"
+all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-501"
+all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-1001"
+all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-1501"
+all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-2001"
+all_model_checkpoint_paths: "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint\\model.ckpt-2160"

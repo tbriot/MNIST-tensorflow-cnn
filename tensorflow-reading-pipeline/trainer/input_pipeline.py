@@ -1,4 +1,6 @@
+import trainer.training_util as u
 import tensorflow as tf
+
 
 # integer, example queue capacity as a multiple of the batch size
 # e.g. '10' creates an example queue size 10 times the size of a batch
@@ -29,6 +31,10 @@ def read_file(
         skip_header_lines=True):
 
         reader = tf.TextLineReader(skip_header_lines=skip_header_lines)
+        reader_work_unit = reader.num_work_units_completed()
+        tf.add_to_collection(u.READER_WORK_UNIT_CNT, reader_work_unit)
+        tf.summary.scalar("reader_wu", reader_work_unit, collections=["debug"])
+
         _, rows = reader.read_up_to(filename_queue, num_records=batch_size)
 
         records_defaults = [[]] * 785  # all columns are required

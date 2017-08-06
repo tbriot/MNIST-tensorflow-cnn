@@ -29,28 +29,33 @@ class EvalCheckpointSaverListener(tf.train.CheckpointSaverListener):
             features, labels = ip.input_pipeline(
                 eval_filename,
                 num_epochs=1,
-                batch_size=100,
+                batch_size=50,
                 shuffle=False)
 
             m.cnn_model(features, labels, layers_layout, keep_prob=1)
-            #self._summary_op = tf.summary.merge_all(u.EVAL_SUMMARY_OP)
-            self._summary_op = tf.summary.merge_all("debug")
+            self._summary_op = tf.summary.merge_all(u.EVAL_SUMMARY_OP)
 
     def after_save(self,
-                  session,
-                  global_step_value):
+                   session,
+                   global_step_value):
 
-        self._latest_checkpoint = tf.train.latest_checkpoint(self._checkpoint_dir)
+        # by default, the checkpoint saver calls back the 'after_save' method when global step = 1
+        # we don't want to run an evaluation at this stage of the process
+        if global_step_value > 1:
 
-        print("gs={}. A new checkpoint has been created ({}). Running evaluation.".format(
-            global_step_value,
-            os.path.basename(self._latest_checkpoint))
-        )
+            self._latest_checkpoint = tf.train.latest_checkpoint(self._checkpoint_dir)
 
-        #gs = tf.train.get_global_step()
-        self._run_eval(global_step_value)
+            print("[global step={}] New checkpoint created ({}). Running evaluation.".format(
+                global_step_value,
+                os.path.basename(self._latest_checkpoint))
+            )
 
-        print("gs={}. Evaluation completed.".format(global_step_value))
+            eval_start_time = time.time()
+            self._run_eval(global_step_value)
+            eval_elapsed_time = time.time() - eval_start_time
+
+            print("[global step={}] Evaluation completed in {:.0f} seconds.".format(global_step_value,
+                                                                                    eval_elapsed_time))
 
     def _run_eval(self, global_step):
         with self._graph.as_default():

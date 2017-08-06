@@ -124,7 +124,17 @@ def _add_train_op(loss, global_step):
     with tf.name_scope("train"):
         # learning rate (lr) is defined as a tf Variable
         # it will be updated during the training phase (1E-3, 5E-4, 1E-4, ...)
-        lr = tf.Variable(initial_value=0.001, trainable=False, name="learning_rate")
+        """
+        lr = tf.Variable(initial_value=0.001,
+                         trainable=False,
+                         name="learning_rate",
+                         collections=[u.LEARNING_RATE_OP, tf.GraphKeys.GLOBAL_VARIABLES])
+        """
+
+        lr = tf.placeholder(tf.float32,
+                            shape=[],
+                            name="learning_rate")
+        tf.add_to_collection(u.LEARNING_RATE_OP, lr)
 
         # log learning rate variable in the tf event file
         tf.summary.scalar("learning-rate", lr, collections=["debug"])
