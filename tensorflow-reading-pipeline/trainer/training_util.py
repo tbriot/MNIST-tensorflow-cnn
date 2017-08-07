@@ -9,3 +9,10 @@ def get_lr_op(graph):
 
 def get_reader_wu_op(graph):
     return graph.get_collection(READER_WORK_UNIT_CNT)[0]
+
+
+def get_epochs(training_program):
+    num_epochs = 0
+    for step in training_program:
+        num_epochs += step['epochs']
+    return num_epochs

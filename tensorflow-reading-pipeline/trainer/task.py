@@ -2,6 +2,7 @@ import trainer.input_pipeline as ip
 import trainer.model as m
 import trainer.eval_listener as h
 import trainer.update_lr_hook as lr
+import trainer.training_util as u
 import tensorflow as tf
 import os
 import time
@@ -11,9 +12,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 def run(train_filename, eval_filename, layers_layout, chkpt_dir, event_dir, training_program):
 
+    num_epochs = u.get_epochs(training_program)
+
     features, labels = ip.input_pipeline(
         train_filename,
-        num_epochs=3,
+        num_epochs,
         batch_size=50,
         shuffle=False)
 
@@ -96,8 +99,9 @@ layers = [{"type": "conv", "filter_size": 5, "depth": 6, "mp_size": 2},
           {"type": "full", "units": 84, "activation": True},
           {"type": "full", "units": 10, "activation": False}]
 
-my_training_program = [{"lr": 1E-3, "epochs": 1},
-                       {"lr": 5E-4, "epochs": 2}]
+my_training_program = [{"lr": 1E-3, "epochs": 2},
+                       {"lr": 5E-4, "epochs": 2},
+                       {"lr": 1E-4, "epochs": 2}]
 
 my_chkpt_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-model-checkpoint"
 my_event_dir = "C:/Users/Timo/PycharmProjects/Kaggle/MNIST/tf-event-files"

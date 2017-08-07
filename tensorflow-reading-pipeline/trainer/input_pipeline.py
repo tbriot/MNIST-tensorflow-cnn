@@ -78,7 +78,7 @@ def batch(
 
 def input_pipeline(
         filename,
-        num_epochs=1,
+        num_epochs,
         batch_size=50,
         shuffle=True
         ):
